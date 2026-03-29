@@ -1,0 +1,71 @@
+name: Build & Deploy Jordan Bot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package*.json'
+      - 'Dockerfile'
+  workflow_dispatch:
+
+env:
+  IMAGE: ghcr.io/john6810/jordan-bot
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout jordan-bot
+        uses: actions/checkout@v4
+
+      - name: Login ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get short SHA
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & Push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.sha.outputs.short }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Checkout argocd-apps
+        uses: actions/checkout@v4
+        with:
+          repository: john6810/argocd-apps
+          token: ${{ secrets.GITOPS_PAT }}
+          path: argocd-apps
+
+      - name: Update image tag in argocd-apps
+        run: |
+          SHA="${{ steps.sha.outputs.short }}"
+          FILE="argocd-apps/apps/jordan-bot/deployment.yaml"
+          sed -i "s|image: ghcr.io/john6810/jordan-bot:.*|image: ghcr.io/john6810/jordan-bot:${SHA}|" "$FILE"
+
+      - name: Commit & Push to argocd-apps
+        run: |
+          cd argocd-apps
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps/jordan-bot/deployment.yaml
+          git commit -m "chore(jordan): update image to ${{ steps.sha.outputs.short }}" || echo "nothing to commit"
+          git push

@@ -1,0 +1,17 @@
+{
+  "name": "jordan-bot",
+  "version": "1.0.0",
+  "description": "📊 Jordan — Discord trading assistant for Stock Screener",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js",
+    "register": "node src/register-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.0",
+    "axios": "^1.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
