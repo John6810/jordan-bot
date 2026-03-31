@@ -514,6 +514,12 @@ function scheduleEODScan() {
       await postScheduledScan();
     }
 
+    // Weekly Discover: Sunday at 09:05
+    if (day === 0 && hour === 9 && min === 5) {
+      console.log('Scheduled weekly discover starting...');
+      await postScheduledDiscover();
+    }
+
     // Signal alerts: Mon-Fri every :00 and :30 during 16:00-21:30
     if (day >= 1 && day <= 5 && hour >= 16 && hour <= 21 && (min === 0 || min === 30)) {
       console.log('Scheduled signal alert check...');
@@ -541,6 +547,32 @@ async function postScheduledScan() {
     console.log(`EOD scan posted: ${data.results.length} tickers, ${buys.length} BUY`);
   } catch (err) {
     console.error('Scheduled scan failed:', err.message);
+  }
+}
+
+async function postScheduledDiscover() {
+  const channel = client.channels.cache.get(DISCORD_CHANNEL_ID);
+  if (!channel) return;
+
+  try {
+    const data = await callAPI('/api/discover?top=15&quick=true');
+    if (data.error || !data.results?.length) return;
+
+    let text = `**${data.total_candidates}** candidats analysés sur ${(data.sectors_scanned || []).length} secteurs\n\n`;
+    text += '```\n';
+    text += '#   TICKER  SCORE  SECTOR\n';
+    for (const [i, r] of data.results.entries()) {
+      const ticker = (r.ticker || r.symbol || '').padEnd(7);
+      const score = (r.discovery_score || r.score || 0).toFixed(1).padStart(5);
+      const sector = (r.sector || '').slice(0, 18);
+      text += `${String(i + 1).padStart(2)}. ${ticker} ${score}  ${sector}\n`;
+    }
+    text += '```';
+
+    await channel.send({ embeds: [embed('Weekly Discover — Top 15', text, COLORS.BUY)] });
+    console.log(`Weekly discover posted: ${data.results.length} results`);
+  } catch (err) {
+    console.error('Scheduled discover failed:', err.message);
   }
 }
 
