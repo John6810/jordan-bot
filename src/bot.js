@@ -492,5 +492,83 @@ client.on('messageCreate', async (message) => {
   }
 });
 
+// ─── Scheduled tasks ─────────────────────────────────────────
+
+/**
+ * Post EOD scan results to the channel every weekday at 22:35 Brussels time.
+ * Also post signal alerts every 30 min during market hours (15:30-22:00).
+ */
+function scheduleEODScan() {
+  const SCAN_HOUR = 22, SCAN_MIN = 35;
+  const TZ = 'Europe/Brussels';
+
+  setInterval(async () => {
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: TZ }));
+    const day = now.getDay(); // 0=Sun, 6=Sat
+    const hour = now.getHours();
+    const min = now.getMinutes();
+
+    // EOD Scan: Mon-Fri at 22:35
+    if (day >= 1 && day <= 5 && hour === SCAN_HOUR && min === SCAN_MIN) {
+      console.log('Scheduled EOD scan starting...');
+      await postScheduledScan();
+    }
+
+    // Signal alerts: Mon-Fri every :00 and :30 during 16:00-21:30
+    if (day >= 1 && day <= 5 && hour >= 16 && hour <= 21 && (min === 0 || min === 30)) {
+      console.log('Scheduled signal alert check...');
+      await postSignalAlerts();
+    }
+  }, 60_000); // check every minute
+}
+
+async function postScheduledScan() {
+  const channel = client.channels.cache.get(DISCORD_CHANNEL_ID);
+  if (!channel) return;
+
+  try {
+    const data = await callAPI('/api/scan');
+    if (data.error || !data.results) return;
+
+    const buys = data.results.filter(r => r.signal === 'BUY' || r.signal === 'STRONG_BUY');
+    const color = buys.length > 0 ? COLORS.BUY : COLORS.NEUTRAL;
+
+    await channel.send({ embeds: [embed(
+      `EOD Scan — ${buys.length} BUY signal(s)`,
+      formatScan(data),
+      color,
+    )] });
+    console.log(`EOD scan posted: ${data.results.length} tickers, ${buys.length} BUY`);
+  } catch (err) {
+    console.error('Scheduled scan failed:', err.message);
+  }
+}
+
+async function postSignalAlerts() {
+  const channel = client.channels.cache.get(DISCORD_CHANNEL_ID);
+  if (!channel) return;
+
+  try {
+    const data = await callAPI('/api/alerts/check');
+    if (data.error || !data.changes?.length) return;
+
+    let text = '';
+    for (const c of data.changes) {
+      const icon = c.direction === 'UPGRADE' ? '⬆️' : '⬇️';
+      text += `${icon} **${c.ticker}** ${c.old_signal} → **${c.new_signal}** (score ${c.score})\n`;
+    }
+    const color = data.changes.some(c => c.direction === 'DOWNGRADE') ? COLORS.SELL : COLORS.BUY;
+    await channel.send({ embeds: [embed(`${data.count} Signal Change(s)`, text, color)] });
+    console.log(`Signal alerts posted: ${data.count} changes`);
+  } catch (err) {
+    console.error('Signal alert check failed:', err.message);
+  }
+}
+
 // ─── Login ───────────────────────────────────────────────────
+client.once('ready', () => {
+  scheduleEODScan();
+  console.log('Scheduled tasks activated (EOD scan 22:35, alerts every 30min)');
+});
+
 client.login(process.env.DISCORD_TOKEN);
