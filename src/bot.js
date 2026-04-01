@@ -529,8 +529,14 @@ function scheduleEODScan() {
 }
 
 async function postScheduledScan() {
-  const channel = client.channels.cache.get(DISCORD_CHANNEL_ID);
-  if (!channel) return;
+  let channel;
+  try {
+    channel = await client.channels.fetch(DISCORD_CHANNEL_ID);
+  } catch (e) {
+    console.error('Cannot fetch channel', DISCORD_CHANNEL_ID, e.message);
+    return;
+  }
+  if (!channel) { console.error('Channel not found:', DISCORD_CHANNEL_ID); return; }
 
   try {
     const data = await callAPI('/api/scan');
@@ -551,8 +557,14 @@ async function postScheduledScan() {
 }
 
 async function postScheduledDiscover() {
-  const channel = client.channels.cache.get(DISCORD_CHANNEL_ID);
-  if (!channel) return;
+  let channel;
+  try {
+    channel = await client.channels.fetch(DISCORD_CHANNEL_ID);
+  } catch (e) {
+    console.error('Cannot fetch channel', DISCORD_CHANNEL_ID, e.message);
+    return;
+  }
+  if (!channel) { console.error('Channel not found:', DISCORD_CHANNEL_ID); return; }
 
   try {
     const data = await callAPI('/api/discover?top=15&quick=true');
@@ -577,8 +589,14 @@ async function postScheduledDiscover() {
 }
 
 async function postSignalAlerts() {
-  const channel = client.channels.cache.get(DISCORD_CHANNEL_ID);
-  if (!channel) return;
+  let channel;
+  try {
+    channel = await client.channels.fetch(DISCORD_CHANNEL_ID);
+  } catch (e) {
+    console.error('Cannot fetch channel', DISCORD_CHANNEL_ID, e.message);
+    return;
+  }
+  if (!channel) { console.error('Channel not found:', DISCORD_CHANNEL_ID); return; }
 
   try {
     const data = await callAPI('/api/alerts/check');
@@ -599,8 +617,10 @@ async function postSignalAlerts() {
 
 // ─── Login ───────────────────────────────────────────────────
 client.once('ready', () => {
+  console.log('DISCORD_CHANNEL_ID:', DISCORD_CHANNEL_ID || 'NOT SET');
+  console.log('SCREENER_API_URL:', API_BASE);
   scheduleEODScan();
-  console.log('Scheduled tasks activated (EOD scan 22:35, alerts every 30min)');
+  console.log('Scheduled tasks activated (EOD scan 22:35, alerts every 30min, discover Sun 09:05)');
 });
 
 client.login(process.env.DISCORD_TOKEN);
